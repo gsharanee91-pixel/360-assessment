@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Assessment {
+  id        String   @id @default(cuid())
+  title     String
+  description String?
+  createdAt DateTime @default(now())
+  
+  competencies Competency[]
+  participants Participant[]
+  evaluations  Evaluation[]
+}
+
+model Competency {
+  id           String   @id @default(cuid())
+  name         String
+  order        Int      @default(0)
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  questions    Question[]
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  text          String   // The description/statement
+  order         Int      @default(0)
+  competencyId  String
+  competency    Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+  
+  responses     Response[]
+}
+
+model Participant {
+  id            String   @id @default(cuid())
+  name          String
+  email         String
+  role          String   // 'self', 'peer', 'colead'
+  token         String   @unique @default(cuid()) // For login links
+  assessmentId  String
+  assessment    Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  // A participant can be the target of many evaluations
+  targetEvaluations Evaluation[] @relation("TargetEvaluations")
+  // A participant can be the evaluator in many evaluations
+  givenEvaluations  Evaluation[] @relation("EvaluatorEvaluations")
+  
+  // If role is 'self', this is their self-assessment
+  selfSurvey    Survey?
+}
+
+// Used ONLY for the Student's self-assessment
+model Survey {
+  id            String   @id @default(cuid())
+  participantId String   @unique
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  assessmentId  String
+  
+  responses     Response[]
+}
+
+// Used for Peer and Co-Lead evaluations
+model Evaluation {
+  id            String   @id @default(cuid())
+  assessmentId  String
+  assessment    Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  evaluatorId   String   // The Peer or Co-Lead
+  evaluator     Participant @relation("EvaluatorEvaluations", fields: [evaluatorId], references: [id], onDelete: Cascade)
+  
+  targetId      String   // The Student being evaluated
+  target        Participant @relation("TargetEvaluations", fields: [targetId], references: [id], onDelete: Cascade)
+  
+  responses     Response[]
+  overall       OverallFeedback?
+  
+  createdAt     DateTime @default(now())
+}
+
+model Response {
+  id            String   @id @default(cuid())
+  value         Int      // 1 to 5 rating
+  
+  questionId    String?
+  question      Question? @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  surveyId      String?
+  survey        Survey? @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  
+  evaluationId  String?
+  evaluation    Evaluation? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+}
+
+model OverallFeedback {
+  id            String   @id @default(cuid())
+  rating        Int      // 1 to 5 overall rating
+  feedback      String   @db.Text // Anonymous text feedback
+  
+  evaluationId  String   @unique
+  evaluation    Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+}
